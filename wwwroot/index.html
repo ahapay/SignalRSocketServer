@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignalR Socket.IO Style Test Client</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .registered {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .message {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .test-section {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>SignalR Socket.IO Style Test Client</h1>
+    
+    <div class="container">
+        <h2>Connection Status</h2>
+        <div id="connectionStatus" class="status disconnected">Disconnected</div>
+        <button id="connectBtn">Connect to Server</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+    </div>
+
+    <div class="container">
+        <h2>Client Registration</h2>
+        <p>After connecting, register with a value to determine if you'll receive push messages:</p>
+        <ul>
+            <li><strong>Value = 1:</strong> ALLOWED to receive push messages</li>
+            <li><strong>Value = 2:</strong> NOT allowed to receive push messages</li>
+        </ul>
+        <button id="register1Btn" disabled>Register with Value = 1 (Allowed)</button>
+        <button id="register2Btn" disabled>Register with Value = 2 (Not Allowed)</button>
+        <div id="registrationStatus"></div>
+    </div>
+
+    <div class="container">
+        <h2>Test Push Messages</h2>
+        <p>Use these buttons to test the REST API endpoint that triggers push messages:</p>
+        <div class="test-section">
+            <h3>Send Test Message via REST API</h3>
+            <input type="text" id="messageInput" placeholder="Enter message to send" value="Hello from test client!" style="width: 300px; padding: 5px;">
+            <button id="sendPushBtn">Send Push Message</button>
+            <div id="pushStatus"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Message Log</h2>
+        <div id="messageLog" class="log"></div>
+        <button id="clearLogBtn">Clear Log</button>
+    </div>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/hub")
+            .withAutomaticReconnect()
+            .build();
+
+        let connectionId = null;
+
+        // DOM elements
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const register1Btn = document.getElementById('register1Btn');
+        const register2Btn = document.getElementById('register2Btn');
+        const registrationStatus = document.getElementById('registrationStatus');
+        const sendPushBtn = document.getElementById('sendPushBtn');
+        const messageInput = document.getElementById('messageInput');
+        const pushStatus = document.getElementById('pushStatus');
+        const messageLog = document.getElementById('messageLog');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+
+        // Logging function
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logEntry.className = type === 'error' ? 'message' : '';
+            messageLog.appendChild(logEntry);
+            messageLog.scrollTop = messageLog.scrollHeight;
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                connectionStatus.textContent = `Connected (ID: ${connectionId})`;
+                connectionStatus.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                register1Btn.disabled = false;
+                register2Btn.disabled = false;
+                sendPushBtn.disabled = false;
+            } else {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                register1Btn.disabled = true;
+                register2Btn.disabled = true;
+                sendPushBtn.disabled = true;
+                connectionId = null;
+                registrationStatus.innerHTML = '';
+            }
+        }
+
+        // SignalR event handlers
+        connection.onreconnected(() => {
+            log('Reconnected to server');
+        });
+
+        connection.onreconnecting(() => {
+            log('Attempting to reconnect...');
+            updateConnectionStatus(false);
+        });
+
+        connection.onclose(() => {
+            log('Connection closed');
+            updateConnectionStatus(false);
+        });
+
+        // Handle registration result from server
+        connection.on("RegistrationResult", (result) => {
+            log(`Registration result: ${result.message}`);
+            registrationStatus.innerHTML = `<div class="status registered">${result.message}</div>`;
+        });
+
+        // Handle push messages from server
+        connection.on("ReceivePush", (payload) => {
+            log(`📨 PUSH RECEIVED: ${payload.formattedMessage}`, 'message');
+            log(`   Original message: "${payload.message}"`);
+            log(`   Server time: ${payload.serverTimeUtc}`);
+        });
+
+        // Button event handlers
+        connectBtn.addEventListener('click', async () => {
+            try {
+                await connection.start();
+                connectionId = connection.connectionId;
+                log('Connected to SignalR hub');
+                updateConnectionStatus(true);
+            } catch (err) {
+                log(`Connection error: ${err.toString()}`, 'error');
+            }
+        });
+
+        disconnectBtn.addEventListener('click', async () => {
+            try {
+                await connection.stop();
+                log('Disconnected from server');
+                updateConnectionStatus(false);
+            } catch (err) {
+                log(`Disconnection error: ${err.toString()}`, 'error');
+            }
+        });
+
+        register1Btn.addEventListener('click', async () => {
+            try {
+                await connection.invoke("RegisterClient", 1);
+                log('Sent registration request with value = 1 (ALLOWED to receive messages)');
+            } catch (err) {
+                log(`Registration error: ${err.toString()}`, 'error');
+            }
+        });
+
+        register2Btn.addEventListener('click', async () => {
+            try {
+                await connection.invoke("RegisterClient", 2);
+                log('Sent registration request with value = 2 (NOT allowed to receive messages)');
+            } catch (err) {
+                log(`Registration error: ${err.toString()}`, 'error');
+            }
+        });
+
+        sendPushBtn.addEventListener('click', async () => {
+            const message = messageInput.value.trim();
+            if (!message) {
+                log('Please enter a message', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/push', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    log(`📤 Push sent via REST API: "${message}"`);
+                    log(`   Target group: ${result.sentToGroup}`);
+                    pushStatus.innerHTML = `<div class="status registered">Push sent successfully to authorized clients only</div>`;
+                } else {
+                    log(`Push failed: ${result.error}`, 'error');
+                    pushStatus.innerHTML = `<div class="status disconnected">Push failed: ${result.error}</div>`;
+                }
+            } catch (err) {
+                log(`Push error: ${err.toString()}`, 'error');
+                pushStatus.innerHTML = `<div class="status disconnected">Push error: ${err.toString()}</div>`;
+            }
+        });
+
+        clearLogBtn.addEventListener('click', () => {
+            messageLog.innerHTML = '';
+            log('Log cleared');
+        });
+
+        // Initialize
+        log('Test client ready. Click "Connect to Server" to begin.');
+    </script>
+</body>
+</html>
