@@ -13,12 +13,11 @@ builder.Services.AddSignalR();
 // In production, you should restrict this to specific origins
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("CorsPolicy", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("http://localhost:8080", "http://127.0.0.1:8080")
+        policy.AllowAnyOrigin()
               .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+              .AllowAnyHeader();
     });
 });
 
@@ -38,7 +37,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // Use CORS policy
-app.UseCors("CorsPolicy");
+app.UseCors("AllowAll");
 
 app.UseAuthorization();
 
@@ -47,7 +46,7 @@ app.MapControllers();
 
 // Map SignalR hub endpoint
 // This creates the /hub endpoint that clients will connect to
-app.MapHub<NotificationHub>("/notificationHub").RequireCors("CorsPolicy");
+app.MapHub<NotificationHub>("/hub");
 
 // Serve static files for the test client
 app.UseStaticFiles();
