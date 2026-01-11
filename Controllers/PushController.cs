@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using SignalRSocketServer.Hubs;
+using System;
 
 namespace SignalRSocketServer.Controllers
 {
@@ -33,25 +34,22 @@ namespace SignalRSocketServer.Controllers
                 return BadRequest(new { error = "Message is required" });
             }
 
-            // Create the push payload with message and server timestamp
+            // Create a simple payload indicating service updates
             var pushPayload = new
             {
-                message = request.Message,
-                serverTimeUtc = DateTime.UtcNow,
-                formattedMessage = $"Message received from server at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC"
+                financeservice = "updated",
+                creditmonitorservice = "updated",
+                transactionId = Guid.NewGuid().ToString(),
+                timestampUtc = DateTime.UtcNow,
+                userId = request.UserId
             };
 
             // Send the message ONLY to clients in the "allowed" group
             // Clients that sent value = 2 are NOT in this group and will NOT receive the message
             await _hubContext.Clients.Group(ALLOWED_GROUP).SendAsync("ReceivePush", pushPayload);
 
-            return Ok(new 
-            { 
-                success = true,
-                message = "Push sent to authorized clients only",
-                sentToGroup = ALLOWED_GROUP,
-                payload = pushPayload
-            });
+            // Return exactly the payload so clients can display it from the HTTP response
+            return Ok(pushPayload);
         }
     }
 
@@ -64,5 +62,6 @@ namespace SignalRSocketServer.Controllers
         /// The message text to send to clients
         /// </summary>
         public string Message { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
     }
 }
